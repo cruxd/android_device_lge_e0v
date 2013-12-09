@@ -1,0 +1,77 @@
+on early-init
+    start ueventd
+
+on init
+    #-------------------------------------------------------------------------------------
+    # Category [kalen.lee@lge.com 110610] 
+    # add /system/sbin:/system/bin:/system/xbin into PATH for BnR daemon
+    # Please move this configuration into brd daemon with setenv later
+    export PATH /sbin:/system/sbin:/system/bin:/system/xbin
+    export LD_LIBRARY_PATH /sbin
+    #export PATH /sbin
+    export ANDROID_ROOT /system
+    export ANDROID_DATA /data
+    export EXTERNAL_STORAGE /sdcard
+
+    symlink /system/etc /etc
+
+    mkdir /sdcard
+    mkdir /system
+    mkdir /data
+    mkdir /cache
+    mount /tmp /tmp tmpfs
+    #--------------------------------------------------------------------------------------
+    # Category [kalen.lee@lge.com 110623]
+    # add directories to mount internal sd card
+    #--------------------------------------------------------------------------------------
+    mkdir /mnt
+    mkdir /mnt/sdcard
+    symlink /mnt/sdcard /sdcard
+    # KALEN_END
+
+
+    wait /dev/block/mmcblk0p14
+    mount ext4 /dev/block/mmcblk0p14 /system ro data=ordered barrier=1
+
+    wait /dev/block/mmcblk0p21
+    exec /system/bin/demigod_make_ext4fs -e /dev/block/mmcblk0p21 /data
+    exec /system/bin/e2fsck -p /dev/block/mmcblk0p21
+    mount ext4 /dev/block/mmcblk0p21 /data nosuid nodev noatime barrier=1 data=ordered noauto_da_alloc errors=panic
+
+
+    
+on boot
+
+    ifup lo
+    hostname localhost
+    domainname localdomain
+
+    class_start default
+
+service ueventd /sbin/ueventd
+    critical
+
+service recovery /sbin/recovery
+#-------------------------------------------------------------------------------------
+# Category [kalen.lee@lge.com 110610] launch B&R daemon for recovery mode as root user
+service brd /sbin/brd
+    user root
+# KALEN_END
+
+service adbd /sbin/adbd recovery
+#    disabled
+#
+#on property:persist.service.adb.enable=1
+#    start adbd
+#
+#on property:persist.service.adb.enable=0
+#    stop adbd
+
+# enable rmt_storage
+service rmt_storage /system/bin/rmt_storage /dev/block/mmcblk0p10 /dev/block/mmcblk0p11
+    user root
+    disabled
+
+on property:ro.emmc=1
+    start rmt_storage
+
